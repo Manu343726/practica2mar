@@ -1,12 +1,13 @@
 #ifndef GRAPH_HPP
 #define GRAPH_HPP
 
-#include <initializer_list>
 #include <utility>
 #include <iterator>
 #include <vector>
 #include <stdexcept>
 #include <cassert>
+
+#include <manu343726/range/v3/all.hpp>
 
 
 
@@ -59,22 +60,6 @@ struct adjacency_matrix
         return result;
     }
 
-    void _apply_edges(std::initializer_list<std::initializer_list<int>> pairs, bool value)
-    {
-        for(auto pair : pairs)
-        {
-            assert(std::end(pair) - std::begin(pair) == 2);
-
-            int a = *(std::begin(pair));
-            int b = *(std::begin(pair) + 1);
-
-            _matrix[a][b] = value;
-
-            if(!directed())
-                _matrix[b][a] = value;
-        }
-    }
-
     void add_edges(std::initializer_list<std::initializer_list<int>> pairs)
     {
         _apply_edges(pairs, true);
@@ -116,7 +101,30 @@ struct adjacency_matrix
         else
             throw std::out_of_range{"adjacency_matrix::at(i,j): Index out of range"};
     }
+
+    auto neighbours(std::size_t node) const
+    {
+        return ranges::view::iota(0) |
+               ranges::view::remove_if([](int i){ return _matrix[node][i];});
+    }
+
 private:
+    void _apply_edges(std::initializer_list<std::initializer_list<int>> pairs, bool value)
+    {
+        for(auto pair : pairs)
+        {
+            assert(std::end(pair) - std::begin(pair) == 2);
+
+            int a = *(std::begin(pair));
+            int b = *(std::begin(pair) + 1);
+
+            _matrix[a][b] = value;
+
+            if(!directed())
+                _matrix[b][a] = value;
+        }
+    }
+
     std::vector<std::vector<bool>> _matrix;
     bool _directed;
 };

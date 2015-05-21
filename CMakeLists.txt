@@ -1,9 +1,56 @@
+function(force_cpp_standard_on_target TARGET INTERFACE_TARGET STANDARD)
+    message(STATUS "Overriding '${TARGET}' options")
+
+    if(INTERFACE_TARGET)
+        set(property "INTERFACE_COMPILE_OPTIONS")
+    else()
+        set(property "COMPILE_OPTIONS")
+    endif()
+
+    get_property(options TARGET ${TARGET} PROPERTY ${property})
+    set(overrided_options)
+
+    foreach(option ${options})
+        message("   -> ${option}")
+
+        if(option MATCHES "-std=.*")
+            list(APPEND overrided_options -std=${STANDARD})
+        else()
+            list(APPEND overrided_options ${option})
+        endif()
+    endforeach()
+
+    set_property(TARGET ${TARGET} PROPERTY ${property} "${overrided_options}")
+    get_property(options TARGET ${TARGET} PROPERTY ${property})
+
+    message(STATUS "Final '${TARGET}' options")
+    foreach(option ${options})
+        message("   -> ${option}")
+    endforeach()
+endfunction()
+
+function(force_cpp_standard STANDARD)
+    foreach(dep_target ${BII_LIB_DEPS})
+        if(NOT (${dep_target} MATCHES ".*_interface"))
+            force_cpp_standard_on_target(${dep_target} FALSE ${STANDARD})
+        endif()
+    endforeach()
+endfunction()
+
+function(print_deps)
+    foreach(dep_target ${BII_LIB_DEPS})
+        message("Block dependency: ${dep_target}")
+    endforeach()
+endfunction()
+
+force_cpp_standard(c++1y)
 
 ADD_BII_TARGETS()
 
-if(NOT MSVC)
-    target_compile_options(${BII_BLOCK_TARGET} INTERFACE -std=c++1y)
-endif()
+print_deps()
+force_cpp_standard(c++1y)
+force_cpp_standard_on_target(${BII_main_TARGET} FALSE c++1y)
+
 
 ###############################################################################
 #      HELP                                                                   #
