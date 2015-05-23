@@ -48,7 +48,7 @@ endfunction()
 ADD_BII_TARGETS()
 
 print_deps()
-force_cpp_standard(c++1y)
+#force_cpp_standard(c++1y)
 force_cpp_standard_on_target(${BII_main_TARGET} FALSE c++1y)
 
 
