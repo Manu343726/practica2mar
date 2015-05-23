@@ -13,12 +13,12 @@ function(force_cpp_standard_on_target TARGET INTERFACE_TARGET STANDARD)
     foreach(option ${options})
         message("   -> ${option}")
 
-        if(option MATCHES "-std=.*")
-            list(APPEND overrided_options -std=${STANDARD})
-        else()
+        if(NOT (option MATCHES "-std=.*"))
             list(APPEND overrided_options ${option})
         endif()
     endforeach()
+
+    list(APPEND overrided_options "-std=${STANDARD}")
 
     set_property(TARGET ${TARGET} PROPERTY ${property} "${overrided_options}")
     get_property(options TARGET ${TARGET} PROPERTY ${property})
@@ -31,7 +31,9 @@ endfunction()
 
 function(force_cpp_standard STANDARD)
     foreach(dep_target ${BII_LIB_DEPS})
-        if(NOT (${dep_target} MATCHES ".*_interface"))
+        if(${dep_target} MATCHES ".*_interface")
+            force_cpp_standard_on_target(${dep_target} TRUE ${STANDARD})
+         else()
             force_cpp_standard_on_target(${dep_target} FALSE ${STANDARD})
         endif()
     endforeach()
@@ -42,8 +44,6 @@ function(print_deps)
         message("Block dependency: ${dep_target}")
     endforeach()
 endfunction()
-
-force_cpp_standard(c++1y)
 
 ADD_BII_TARGETS()
 
