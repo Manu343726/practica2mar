@@ -48,8 +48,12 @@ endfunction()
 ADD_BII_TARGETS()
 
 print_deps()
-#force_cpp_standard(c++1y)
+force_cpp_standard(c++1y)
 force_cpp_standard_on_target(${BII_main_TARGET} FALSE c++1y)
+
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+  set_target_properties(${BII_main_TARGET} PROPERTIES LINK_FLAGS "-lc++abi -lc++")
+endif()
 
 
 ###############################################################################

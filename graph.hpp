@@ -22,11 +22,10 @@ public:
     {}
 
     adjacency_matrix(std::size_t nodes_count, bool directed = false) :
-        _directed{directed} {
-        _matrix.resize(nodes_count);
-
-        for (auto &row : _matrix)
-            row.resize(nodes_count, false); // allocate nodes_count sized row and fill it with "false"s
+        _nodes_count{nodes_count},
+        _directed{directed}
+    {
+        _matrix.resize(nodes_count*nodes_count, false);
     }
 
     adjacency_matrix(std::initializer_list<std::initializer_list<int>> pairs, std::size_t nodes_count, bool directed = false) :
@@ -42,14 +41,13 @@ public:
 
     std::size_t nodes_count() const
     {
-        return _matrix.size();
+        return _nodes_count;
     }
 
     void clear()
     {
-        for (auto &row : _matrix)
-            for (auto e : row)
-                e = false;
+        for(auto e : _matrix)
+            e = false;
     }
 
     auto edges() const
@@ -65,7 +63,7 @@ public:
 
             return ranges::view::for_each(ranges::view::iota(b, nodes_count() - 1), [=](std::size_t j)
             {
-                return ranges::yield_if(_matrix[i][j], std::make_pair(i, j));
+                return ranges::yield_if((*this)(i,j), std::make_pair(i, j));
             });
         }) | ranges::view::bounded;
     }
@@ -84,11 +82,13 @@ public:
     }
 
     bool operator()(std::size_t i, std::size_t j) const noexcept {
-        return _matrix[i][j];
+        assert(i < nodes_count() && j < nodes_count());
+        return _at(i,j);
     }
 
     node_proxy operator()(std::size_t i, std::size_t j) noexcept {
-        return {*this, i, j};
+        assert(i < nodes_count() && j < nodes_count());
+        return {this, i, j};
     }
 
     bool at(std::size_t i, std::size_t j) const {
@@ -108,18 +108,46 @@ public:
     auto neighbors(std::size_t node) const
     {
         return ranges::view::iota(0u, nodes_count() - 1) |
-               ranges::view::remove_if([=](int i){ return !_matrix[node][i]; }) |
+               ranges::view::remove_if([=](int i){ return !_at(node, i); }) |
                ranges::view::bounded;
     }
 
-    void reserve(std::size_t count)
+    void reserve(std::size_t nodes_count)
     {
-        _matrix.reserve(count);
+        _matrix.resize(nodes_count * nodes_count);
     }
 
     void add_node()
     {
-        _matrix.emplace_back(nodes_count() + 1, false);
+        add_node(nodes_count());
+    }
+
+    void add_node(std::size_t node)
+    {
+        std::size_t new_count = nodes_count() + 1;
+        auto index  = [=](std::size_t i, std::size_t j){return i*nodes_count() + j;};
+        auto index_new = [=](std::size_t i, std::size_t j){return i*new_count + j;};
+
+        if(new_count* new_count < _matrix.size())
+            _matrix.resize(new_count*new_count);
+
+        std::size_t end = node >= nodes_count() ? node + 1 : nodes_count();
+
+        for(std::size_t i = 0; i < end; ++i)
+        {
+            for(std::size_t j = 0; j < end; ++j)
+            {
+                std::size_t x = (i <= node) ? i : i - 1;
+                std::size_t y = (j <= node) ? j : j - 1;
+
+                if(i == node || j == node)
+                    _matrix[index_new(i,j)] = false;
+                else if(i > node || j > node)
+                    _matrix[index_new(i,j)] = _matrix[index(x,y)];
+            }
+        }
+
+        _nodes_count = new_count;
     }
 
     friend std::ostream& operator<<(std::ostream& os, const adjacency_matrix& m)
@@ -129,7 +157,7 @@ public:
             os << "node " << i << ": ";
 
             for(std::size_t j = 0; j< m.nodes_count(); ++j)
-                os << "[" << j << "," << std::boolalpha << m._matrix[i][j] << "] ";
+                os << "[" << j << "," << std::boolalpha << m(i,j) << "] ";
 
             os << "\n";
         }
@@ -147,16 +175,42 @@ private:
             int a = *(std::begin(pair));
             int b = *(std::begin(pair) + 1);
 
-            _matrix[a][b] = value;
-
-            if(!directed())
-                _matrix[b][a] = value;
+            (*this)(a,b) = value;
         }
+    }
+
+    auto _row_indices(std::size_t row) const
+    {
+        return ranges::view::iota(0u, nodes_count() - 1) |
+               ranges::view::transform([=](std::size_t i){ return nodes_count() * row + i; }) |
+               ranges::view::bounded;
+    }
+
+    auto _column_indices(std::size_t column) const
+    {
+        return ranges::view::iota(0u, nodes_count() - 1) |
+               ranges::view::transform([=](std::size_t i){ return nodes_count() * i + column; }) |
+               ranges::view::bounded;
+    }
+
+    std::size_t _index_from_coords(std::size_t i, std::size_t j) const
+    {
+        return i * nodes_count() + j;
+    }
+
+    bool _at(std::size_t i, std::size_t j) const
+    {
+        return _matrix[_index_from_coords(i,j)];
+    }
+
+    std::vector<bool>::reference _at(std::size_t i, std::size_t j)
+    {
+        return _matrix[_index_from_coords(i,j)];
     }
 
     struct node_proxy
     {
-        node_proxy(adjacency_matrix& matrix, std::size_t _i, std::size_t _j) :
+        node_proxy(adjacency_matrix* matrix, std::size_t _i, std::size_t _j) :
             _ref{matrix},
             i{_i},
             j{_j}
@@ -164,20 +218,21 @@ private:
 
         bool operator=(bool b)
         {
-            _ref.get()._matrix[i][j] = b;
+            _ref->_at(i,j)= b;
 
-            if(!_ref.get().directed())
-                _ref.get()._matrix[j][i] = b;
+            if(!_ref->directed())
+                _ref->_at(j,i) = b;
 
             return b;
         }
 
-        std::reference_wrapper<adjacency_matrix> _ref;
+        adjacency_matrix* _ref;
         std::size_t i, j;
     };
 
-    std::vector<std::vector<bool>> _matrix;
-    bool _directed;
+    std::vector<bool> _matrix;
+    std::size_t _nodes_count = 0;
+    bool _directed = false;
 };
 
 template<typename Node>
