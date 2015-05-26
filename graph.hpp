@@ -336,6 +336,7 @@ public:
     METHOD_FROM(remove_edges, _matrix)
     METHOD_FROM(operator(), _matrix)
     METHOD_FROM(at, _matrix)
+    METHOD_FROM(nodes_count, _matrix)
 };
 
 #endif /* GRAPH_HPP */

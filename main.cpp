@@ -11,6 +11,7 @@
 struct node
 {
     int id_;
+    int color = -1;
 
     int id() const
     {
@@ -70,6 +71,30 @@ auto random_graph(std::size_t nodes, float density)
     return std::move(result);
 }
 
+auto non_colored_neighbors(const graph<node>& g, std::size_t node)
+{
+    return g.neighbors(node) | ranges::view::remove_if([](auto n)
+           {
+               return n.color >= 0;
+           }) | ranges::view::bounded;
+}
+
+template<typename Range>
+int first_color_available(Range nodes)
+{
+    int color = -1;
+
+    for(auto node : ranges::view::bounded(nodes))
+        color = std::max(color, node.color);
+
+    return color;
+}
+
+int first_color_available(const graph<node>& g, std::size_t node)
+{
+    return first_color_available(g.neighbors(node));
+}
+
 int main()
 {
     auto graph = random_graph<node, true, true>(1000,0.001);
@@ -77,6 +102,11 @@ int main()
     for(auto edge : graph.edges())
         std::cout << "(" << edge.first() << "," << edge.second() << ")" << std::endl;
 
-    for(auto node : graph.neighbors(0))
-        std::cout << node << std::endl;
+    for(std::size_t i = 0; i < graph.nodes_count(); ++i) 
+    {
+        for(auto node : ranges::view::bounded(non_colored_neighbors(graph, 0)))
+            std::cout << node << std::endl;
+
+        std::cout << "First color: " << first_color_available(graph, i) << std::endl;
+    }
 }
