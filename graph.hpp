@@ -65,7 +65,7 @@ public:
             {
                 return ranges::yield_if((*this)(i,j), std::make_pair(i, j));
             });
-        }) | ranges::view::bounded;
+        });
     }
 
     void add_edges(std::initializer_list<std::initializer_list<int>> pairs) {
@@ -108,8 +108,13 @@ public:
     auto neighbors(std::size_t node) const
     {
         return ranges::view::iota(0u, nodes_count() - 1) |
-               ranges::view::remove_if([=](int i){ return !_at(node, i); }) |
-               ranges::view::bounded;
+               ranges::view::remove_if([=](int i){ return !_at(node, i); });
+    }
+
+    auto neighbors(std::size_t node)
+    {
+        return ranges::view::iota(0u, nodes_count() - 1) |
+               ranges::view::remove_if([=](int i){ return !_at(node, i); });
     }
 
     void reserve(std::size_t nodes_count)
@@ -133,9 +138,9 @@ public:
 
         std::size_t end = node >= nodes_count() ? node + 1 : nodes_count();
 
-        for(std::size_t i = 0; i < end; ++i)
+        for(std::size_t i = node; i < end; ++i)
         {
-            for(std::size_t j = 0; j < end; ++j)
+            for(std::size_t j = node; j < end; ++j)
             {
                 std::size_t x = (i <= node) ? i : i - 1;
                 std::size_t y = (j <= node) ? j : j - 1;
@@ -182,15 +187,13 @@ private:
     auto _row_indices(std::size_t row) const
     {
         return ranges::view::iota(0u, nodes_count() - 1) |
-               ranges::view::transform([=](std::size_t i){ return nodes_count() * row + i; }) |
-               ranges::view::bounded;
+               ranges::view::transform([=](std::size_t i){ return nodes_count() * row + i; });
     }
 
     auto _column_indices(std::size_t column) const
     {
         return ranges::view::iota(0u, nodes_count() - 1) |
-               ranges::view::transform([=](std::size_t i){ return nodes_count() * i + column; }) |
-               ranges::view::bounded;
+               ranges::view::transform([=](std::size_t i){ return nodes_count() * i + column; });
     }
 
     std::size_t _index_from_coords(std::size_t i, std::size_t j) const
@@ -240,28 +243,31 @@ struct graph {
     graph(bool directed = false) : _matrix{ directed }
     {};
 
-    struct edge_t
+    struct node_t : public Node
     {
-        std::size_t first_index, second_index;
-        const Node* first_ptr;
-        const Node* second_ptr;
+        template<typename... Args>
+        node_t(std::size_t id, Args&&... args) :
+            Node{std::forward<Args>(args)...},
+            id_{id}
+        {}
 
-        edge_t(std::size_t i, std::size_t j, const Node* first_, const Node* second_) :
-            first_index{ i },
-            second_index{ j },
-            first_ptr{ first_ },
-            second_ptr{ second_ }
-        {};
-
-        const Node& first() const
+        std::size_t id() const
         {
-            return *first_ptr;
+            return id_;
         }
 
-        const Node& second() const
+        operator std::size_t() const
         {
-            return *second_ptr;
+            return id();
         }
+
+        friend std::ostream& operator<<(std::ostream& os, const node_t& n)
+        {
+            return os << n.id();
+        }
+
+    private:
+        std::size_t id_;
     };
 
     void reserve(std::size_t count)
@@ -273,7 +279,7 @@ struct graph {
     template<typename... Args>
     void add_node(Args&&... args)
     {
-        _nodes.emplace_back(std::forward<Args>(args)...);
+        _nodes.emplace_back(nodes_count(), std::forward<Args>(args)...);
         _matrix.add_node();
     }
 
@@ -285,13 +291,20 @@ struct graph {
         }) | ranges::view::bounded;
     }
 
+    auto neighbors(std::size_t node)
+    {
+        return ranges::view::transform(_matrix.neighbors(node), [this](std::size_t i) -> node_t&
+        {
+            return _nodes[i];
+        }) | ranges::view::bounded;
+    }
+
     auto edges() const
     {
         return ranges::view::transform(_matrix.edges(), [this](auto edge)
         {
-            return edge_t{edge.first, edge.second,
-                          &_nodes[edge.first], &_nodes[edge.second]};
-        }) | ranges::view::bounded;
+            return std::make_pair(_nodes[edge.first], _nodes[edge.second]);
+        });
     }
 
     const adjacency_matrix& adjacency() const
@@ -304,30 +317,50 @@ struct graph {
         return _matrix;
     }
 
-    using node_id_t = decltype(std::declval<Node>().id());
-
-    auto node_index(const node_id_t& id) const
+    auto operator()(const node_t& a, const node_t& b) const
     {
-        auto it = std::find_if(std::begin(_nodes), std::end(_nodes), [=](const Node& n)
+        return _matrix(a.id(), b.id());
+    }
+
+    auto operator()(const node_t& a, const node_t& b)
+    {
+        return _matrix(a.id(), b.id());
+    }
+
+    node_t operator()(std::size_t i) const
+    {
+        return _nodes[i];
+    }
+
+    node_t& operator()(std::size_t i)
+    {
+        return _nodes[i];
+    }
+
+    auto nodes() const
+    {
+        return ranges::view::iota(0, nodes_count()-1) |
+        ranges::view::transform([this](std::size_t i)
         {
-            return id == n.id();
+           return (*this)(i);
         });
-
-        return it - std::begin(_nodes);
     }
 
-    auto operator()(const node_id_t& a, const node_id_t& b) const
+    auto nodes()
     {
-        return _matrix(node_index(a), node_index(b));
+        return ranges::view::iota(0, nodes_count()-1) |
+        ranges::view::transform([this](std::size_t i) -> node_t&
+        {
+           return (*this)(i);
+        });
     }
 
-    auto operator()(const node_id_t& a, const node_id_t& b)
+    std::size_t nodes_count() const
     {
-        return _matrix(node_index(a), node_index(b));
+        return _nodes.size();
     }
-
 private:
-    std::vector<Node> _nodes;
+    std::vector<node_t> _nodes;
     adjacency_matrix _matrix;
 
 public:
@@ -336,7 +369,6 @@ public:
     METHOD_FROM(remove_edges, _matrix)
     METHOD_FROM(operator(), _matrix)
     METHOD_FROM(at, _matrix)
-    METHOD_FROM(nodes_count, _matrix)
 };
 
 #endif /* GRAPH_HPP */

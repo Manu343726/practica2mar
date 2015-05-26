@@ -10,22 +10,7 @@
 
 struct node
 {
-    int id_;
     int color = -1;
-
-    int id() const
-    {
-        return id_;
-    }
-
-    node(int id) :
-        id_{ id }
-    {}
-
-    friend std::ostream& operator<<(std::ostream& os, const node& n)
-    {
-        return os << n.id();
-    }
 };
 
 template<typename Node, bool node_debug_output = false, bool edge_debug_output = false>
@@ -45,7 +30,7 @@ auto random_graph(std::size_t nodes, float density)
             std::cout << "Adding node (" << i << ")... ";
             begin = std::chrono::high_resolution_clock::now();
         }
-        result.add_node(i);
+        result.add_node();
         if(node_debug_output)
         {
             auto end = std::chrono::high_resolution_clock::now();
@@ -54,7 +39,7 @@ auto random_graph(std::size_t nodes, float density)
         }
     }
 
-    for(std::size_t i = 0; i < nodes*density; ++i)
+    for(std::size_t i = 0; i < density; ++i)
     {
         if(edge_debug_output)
             std::cout << "Generating edges (Pass " << i << ")\n";
@@ -71,18 +56,28 @@ auto random_graph(std::size_t nodes, float density)
     return std::move(result);
 }
 
-auto non_colored_neighbors(const graph<node>& g, std::size_t node)
+template<typename Node>
+auto non_colored_neighbors(const graph<Node>& g, std::size_t node)
 {
     return g.neighbors(node) | ranges::view::remove_if([](auto n)
-           {
-               return n.color >= 0;
-           }) | ranges::view::bounded;
+    {
+       return n.color >= 0;
+    });
+}
+
+template<typename Node>
+auto non_colored_neighbors(graph<Node>& g, std::size_t node)
+{
+    return g.neighbors(node) | ranges::view::remove_if([](auto n)
+    {
+       return n.color >= 0;
+    });
 }
 
 template<typename Range>
 int first_color_available(Range nodes)
 {
-    int color = -1;
+    int color = 0;
 
     for(auto node : ranges::view::bounded(nodes))
         color = std::max(color, node.color);
@@ -90,23 +85,69 @@ int first_color_available(Range nodes)
     return color;
 }
 
-int first_color_available(const graph<node>& g, std::size_t node)
+template<typename Node>
+int first_color_available(const graph<Node>& g, std::size_t node)
 {
     return first_color_available(g.neighbors(node));
 }
 
-int main()
+template<typename Range>
+std::size_t length(Range r)
 {
-    auto graph = random_graph<node, true, true>(1000,0.001);
+    return std::end(r) - std::begin(r);
+}
 
-    for(auto edge : graph.edges())
-        std::cout << "(" << edge.first() << "," << edge.second() << ")" << std::endl;
+template<typename Node>
+void color_graph_naive(graph<Node>& g, std::size_t node)
+{
+    auto& current = g(node);
 
-    for(std::size_t i = 0; i < graph.nodes_count(); ++i) 
+    if(current.color < 0)
+        current.color = first_color_available(g, node);
+
+    auto neighbors = non_colored_neighbors(g, node);
+
+    for (auto &neighbor : neighbors)
     {
-        for(auto node : ranges::view::bounded(non_colored_neighbors(graph, 0)))
-            std::cout << node << std::endl;
-
-        std::cout << "First color: " << first_color_available(graph, i) << std::endl;
+        neighbor.color = current.color + 1;
+        color_graph_naive(g, neighbor);
     }
+}
+
+template<typename Node>
+bool connected(const graph<Node>& g)
+{
+    return ranges::all_of(g.nodes() | ranges::view::bounded, [&](const auto& node)
+    {
+       return !ranges::empty(g.neighbors(node.id()));
+    });
+}
+
+int main(int argn, const char* argv[])
+{
+    std::size_t nodes = argn > 1 ? std::atoi(argv[1]) : 10;
+
+    auto graph = random_graph<node, true, true>(nodes,std::log10(nodes));
+
+    if(!connected(graph))
+        std::cout << "WARNING: Non-connected graph" << std::endl;
+
+    color_graph_naive(graph, 0);
+
+    int max_color = -1;
+
+    for(std::size_t i = 0; i < nodes; ++i)
+    {
+        std::cout << "(" << i << ") color: " << graph(i).color
+                  << " neighbors: ";
+
+        max_color = std::max(graph(i).color, max_color);
+
+        for(auto neighbor : graph.neighbors(i))
+            std::cout << "(" << neighbor.id() << ") ";
+
+        std::cout << std::endl;
+    }
+
+    std::cout << "Max color: " << max_color << std::endl;
 }
