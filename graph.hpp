@@ -268,6 +268,16 @@ struct graph {
             return os << n.id();
         }
 
+        friend bool operator==(const node_t& lhs, const node_t& rhs)
+        {
+            return lhs.id() == rhs.id();
+        }
+
+        friend bool operator!=(const node_t& lhs, const node_t& rhs)
+        {
+            return !(lhs == rhs);
+        }
+
     private:
         std::size_t id_;
     };
