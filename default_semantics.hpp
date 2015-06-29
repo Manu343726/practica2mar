@@ -201,13 +201,11 @@ semantics_builder<
 }
 
 template<typename Semantics,
-        typename HandleType,
-        typename ValueType
+        typename HandleType
 >
 struct default_value_semantics
 {
-    using value_type = HandleType;
-    using handle_type = ValueType;
+    using handle_type = HandleType;
 
     default_value_semantics() :
             This{static_cast<Semantics*>(this)}

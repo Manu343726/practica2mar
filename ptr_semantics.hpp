@@ -30,12 +30,10 @@ namespace
 
 
 template<typename T, typename Allocator = std::allocator<T>>
-struct ptr_semantics : public default_value_semantics<ptr_semantics<T,Allocator>,
-        typename Allocator::value_type,
-        typename Allocator::pointer>
+struct ptr_semantics : public default_value_semantics<ptr_semantics<T,Allocator>,T*>
 {
-    using value_type = typename Allocator::value_type;
-    using handle_type = typename Allocator::pointer;
+    using value_type = T;
+    using handle_type = T*;
 
     ptr_semantics(const Allocator& alloc = Allocator{}) :
             alloc_{alloc}
@@ -49,11 +47,11 @@ struct ptr_semantics : public default_value_semantics<ptr_semantics<T,Allocator>
         return ptr_;
     }
 
-    template<typename U, typename Alloc_ = Allocator>
-    handle_type construct(U&& value, typename std::enable_if<is_poly_allocator<Alloc_>::value>::type* = nullptr)
+    template<typename Arg, typename Alloc_ = Allocator>
+    handle_type construct(Arg&& value, typename std::enable_if<is_poly_allocator<Alloc_>::value>::type* = nullptr)
     {
-        auto ptr_ = alloc_.template allocate(1, value);
-        alloc_.construct(ptr_, std::forward<U>(value));
+        auto ptr_ = alloc_.allocate(1, value);
+        alloc_.construct(ptr_, std::forward<Arg>(value));
         return ptr_;
     }
 
@@ -63,6 +61,13 @@ struct ptr_semantics : public default_value_semantics<ptr_semantics<T,Allocator>
         auto ptr_ = alloc_.allocate(1);
         alloc_.construct(ptr_, std::forward<Arg>(arg));
         return ptr_;
+    }
+
+    handle_type move(handle_type& handle)
+    {
+        handle_type ptr = handle;
+        handle = nullptr;
+        return ptr;
     }
 
     void destroy(handle_type handle)
@@ -81,7 +86,7 @@ struct ptr_semantics : public default_value_semantics<ptr_semantics<T,Allocator>
         return *handle;
     }
 
-private:
+public:
     Allocator alloc_;
 };
 

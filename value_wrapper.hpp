@@ -34,9 +34,9 @@ struct value_wrapper
         handle_{semantics_.copy(v.handle_)}
     {}
 
-    value_wrapper(value_wrapper&& v) :
+    value_wrapper(value_wrapper&& v) noexcept :
         semantics_{std::move(v.semantics_)},
-        handle_{semantics_.move(std::move(v.handle_))}
+        handle_{semantics_.move(v.handle_)}
     {}
 
     value_wrapper& operator=(const value_wrapper& v)
@@ -47,10 +47,10 @@ struct value_wrapper
         return *this;
     }
 
-    value_wrapper& operator=(value_wrapper&& v)
+    value_wrapper& operator=(value_wrapper&& v) noexcept
     {
-        semantics_ = std::move(v._semantics);
-        semantics_.move_assign(handle_, std::move(v._handle));
+        semantics_ = std::move(v.semantics_);
+        semantics_.move_assign(handle_, std::move(v.handle_));
 
         return *this;
     }
@@ -95,7 +95,17 @@ struct value_wrapper
     {
         return get();
     }
-private:
+
+    auto operator->() const -> decltype(&get())
+    {
+        return &(get());
+    }
+
+    auto operator->() -> decltype(&get())
+    {
+        return &(get());
+    }
+public:
     Semantics semantics_;
     handle_type handle_;
 };
